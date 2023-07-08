@@ -18,7 +18,7 @@ include "config.pxi"
 from ._objects cimport pdefault
 from .utils cimport emalloc, efree
 from .h5p import CRT_ORDER_TRACKED
-from .h5p cimport PropID, PropGCID
+from .h5p cimport PropID, PropGCID, propwrap
 from . cimport _hdf5 # to implement container testing for 1.6
 from ._errors cimport set_error_handler, err_cookie
 
@@ -92,14 +92,16 @@ cdef class GroupIter:
     cdef unsigned long nobjs
     cdef GroupID grp
     cdef list names
+    cdef bint reversed
 
 
-    def __init__(self, GroupID grp not None):
+    def __init__(self, GroupID grp not None, bint reversed=False):
 
         self.idx = 0
         self.grp = grp
         self.nobjs = grp.get_num_objs()
         self.names = []
+        self.reversed = reversed
 
 
     def __iter__(self):
@@ -125,6 +127,8 @@ cdef class GroupIter:
 
             self.grp.links.iterate(self.names.append,
                                    idx_type=idx_type)
+            if self.reversed:
+                self.names.reverse()
 
         retval = self.names[self.idx]
         self.idx += 1
@@ -406,7 +410,7 @@ cdef class GroupID(ObjectID):
         Retrieve a copy of the group creation property list used to
         create this group.
         """
-        return PropGCID(H5Gget_create_plist(self.id))
+        return propwrap(H5Gget_create_plist(self.id))
 
 
     @with_phil
@@ -438,6 +442,42 @@ cdef class GroupID(ObjectID):
             return py_cmnt
         finally:
             efree(cmnt)
+
+    IF HDF5_VERSION >= SWMR_MIN_HDF5_VERSION:
+        @with_phil
+        def flush(self):
+            """ no return
+
+            Flushes all buffers associated with a group to disk.
+
+            This function causes all buffers associated with a group to be
+            immediately flushed to disk without removing the data from the cache.
+
+            Use this in SWMR write mode to allow readers to be updated with the
+            group changes.
+
+            Feature requires: 1.10.2 HDF5
+            """
+            H5Gflush(self.id)
+
+        @with_phil
+        def refresh(self):
+            """ no return
+
+            Refreshes all buffers associated with a group.
+
+            This function causes all buffers associated with a group to be
+            cleared and immediately re-loaded with updated contents from disk.
+
+            This function essentially closes the group, evicts all metadata
+            associated with it from the cache, and then re-opens the group.
+            The reopened group is automatically re-registered with the same ID.
+
+            Use this in SWMR read mode to poll for group changes.
+
+            Feature requires: 1.10.2 HDF5
+            """
+            H5Grefresh(self.id)
 
 
     @with_phil
@@ -519,6 +559,10 @@ cdef class GroupID(ObjectID):
         with phil:
             return GroupIter(self)
 
+    def __reversed__(self):
+        """ Return an iterator over group member names in reverse order. """
+        with phil:
+            return GroupIter(self, reversed=True)
 
     def __len__(self):
         """ Number of group members """
