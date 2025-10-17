@@ -47,6 +47,11 @@ You may also initialize the dataset to an existing NumPy array by providing the 
     >>> arr = np.arange(100)
     >>> dset = f.create_dataset("init", data=arr)
 
+Assigning an array into a group works like specifying ``data`` and no other
+parameters::
+
+    >>> f["init"] = arr
+
 Keywords ``shape`` and ``dtype`` may be specified along with ``data``; if so,
 they will override ``data.shape`` and ``data.dtype``.  It's required that
 (1) the total number of points in ``shape`` match the total number of points
@@ -58,7 +63,7 @@ the requested ``dtype``.
 Reading & writing data
 ----------------------
 
-HDF5 datasets re-use the NumPy slicing syntax to read and write to the file.
+HDF5 datasets reuse the NumPy slicing syntax to read and write to the file.
 Slice specifications are translated directly to HDF5 "hyperslab"
 selections, and are a fast and efficient way to access data in the file. The
 following slicing arguments are recognized:
@@ -172,18 +177,26 @@ Data will be read and written in blocks with shape (100,100); for example,
 the data in ``dset[0:100,0:100]`` will be stored together in the file, as will
 the data points in range ``dset[400:500, 100:200]``.
 
-Chunking has performance implications.  It's recommended to keep the total
-size of your chunks between 10 KiB and 1 MiB, larger for larger datasets.
-Also keep in mind that when any element in a chunk is accessed, the entire
-chunk is read from disk.
+Chunking has performance implications because entire chunk is involved even if
+just one chunk element is needed. Chunk shape determines how many chunks are
+required to satisfy a read or write operation. Chunk size (in bytes) influences
+how fast each chunk is processed, usually due to compression or decompression.
+Selecting an appropriate chunk shape to favor expected I/O operations along the
+first few dataset's dimensions helps improve performance.
+
+Chunk size is the product of the number of dataset elements in a chunk and the
+dataset's ``dtype`` size in bytes. A suggested range for chunk size is between
+10 KiB and 1 MiB, larger for larger datasets. The lower end of the range is
+acceptable for files in a file system, whereas for files in cloud object storage
+it is beneficial to opt for larger chunk sizes, up to 2-4 MiB.
 
 Since picking a chunk shape can be confusing, you can have h5py guess a chunk
 shape for you::
 
     >>> dset = f.create_dataset("autochunk", (1000, 1000), chunks=True)
 
-Auto-chunking is also enabled when using compression or ``maxshape``, etc.,
-if a chunk shape is not manually specified.
+Auto-chunking is also silently enabled when using the ``compression`` or
+``maxshape`` keywords, etc., even if ``chunks=None``.
 
 The iter_chunks method returns an iterator that can be used to perform chunk by chunk
 reads or writes::
@@ -208,6 +221,10 @@ be increased up to the HDF5 per-axis limit of 2**64 elements.  Indicate these
 axes using ``None``::
 
     >>> dset = f.create_dataset("unlimited", (10, 10), maxshape=(None, 10))
+
+For a 1D dataset, ``maxshape`` can be an integer instead of a tuple. But to make an
+unlimited 1D dataset, ``maxshape`` must be a tuple ``(None,)``. Passing ``None`` gives
+the default behaviour, where the initial size is also the maximum.
 
 .. note:: Resizing an array with existing data works differently than in NumPy; if
     any axis shrinks, the data in the missing region is discarded.  Data does
@@ -267,10 +284,10 @@ The ``compression_opts`` parameter will then be passed to this filter.
      A Python package of several popular filters, including Blosc, LZ4 and ZFP,
      for convenient use with h5py
 
-   `HDF5 Filter Plugins <https://portal.hdfgroup.org/display/support/HDF5+Filter+Plugins>`_
+   `HDF5 Filter Plugins <https://github.com/HDFGroup/hdf5_plugins/releases>`_
      A collection of filters as a single download from The HDF Group
 
-   `Registered filter plugins <https://portal.hdfgroup.org/display/support/Filters>`_
+   `Registered filter plugins <https://github.com/HDFGroup/hdf5_plugins/blob/master/docs/RegisteredFilterPlugins.md>`_
      The index of publicly announced filter plugins
 
 .. note:: The underlying implementation of the compression filter will have the
@@ -340,7 +357,7 @@ A MultiBlockSlice can be used in place of a slice to select a number of (count)
 blocks of multiple elements separated by a stride, rather than a set of single
 elements separated by a step.
 
-For an explanation of how this slicing works, see the `HDF5 documentation <https://support.hdfgroup.org/HDF5/Tutor/selectsimple.html>`_.
+For an explanation of how this slicing works, see the `HDF5 documentation <https://support.hdfgroup.org/documentation/hdf5/latest/_l_b_dset_sub_r_w.html>`_.
 
 For example::
 
@@ -464,7 +481,7 @@ Reference
         >>> dset = f["MyDS"]
         >>> f.close()
         >>> if dset:
-        ...     print("datset accessible")
+        ...     print("dataset accessible")
         ... else:
         ...     print("dataset inaccessible")
         dataset inaccessible
@@ -495,13 +512,25 @@ Reference
 
     .. method:: astype(dtype)
 
-        Return a wrapper allowing you to read data as a particular
+        Return a read-only view allowing you to read data as a particular
         type.  Conversion is handled by HDF5 directly, on the fly::
 
             >>> dset = f.create_dataset("bigint", (1000,), dtype='int64')
-            >>> out = dset.astype('int16')[:]
+            >>> out = dset.astype('int16')[:500]
             >>> out.dtype
             dtype('int16')
+
+        This can be faster than reading the data and then
+        converting it with NumPy:
+
+            >>> out = dset[:500].astype('int16')  # Typically slower
+
+        In case of variable-width strings, calling ``.astype('T')``
+        (NumPy's native variable-width strings) is more efficient than reading
+        the data into an object-type array; read more at :ref:`npystrings`.
+
+        .. versionchanged:: 3.14
+           Added support for NumPy variable-width strings (``dtype='T'``).
 
         .. versionchanged:: 3.9
            :meth:`astype` can no longer be used as a context manager.
@@ -516,6 +545,13 @@ Reference
        encoding and errors work like ``bytes.decode()``, but the default
        encoding is defined by the datatype - ASCII or UTF-8.
        This is not guaranteed to be correct.
+
+       .. note::
+          If you don't require backwards compatibility with NumPy 1.x or
+          h5py <3.14, you should consider reading into NumPy native strings
+          instead, which can be much faster, with
+          :meth:`.astype('T')<astype>`.
+          Read more at :ref:`npystrings`.
 
        .. versionadded:: 3.0
 
@@ -559,6 +595,18 @@ Reference
     .. method:: len()
 
         Return the size of the first axis.
+
+    .. method:: refresh
+
+        Refresh the dataset metadata by reloading from the file.
+        This is part of the :doc:`../swmr` features.
+
+    .. method:: flush
+
+        Flush the dataset data and metadata to the file.
+        If the dataset is chunked, raw data chunks are written to the file.
+        This is part of the :doc:`../swmr` features. Use it in SWMR write mode to
+        allow readers to be updated with the dataset changes.
 
     .. method:: make_scale(name='')
 

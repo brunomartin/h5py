@@ -1,5 +1,5 @@
-.. image:: https://travis-ci.org/h5py/h5py.png
-   :target: https://travis-ci.org/h5py/h5py
+.. image:: https://github.com/h5py/h5py/actions/workflows/build_wheels.yml/badge.svg?branch=master
+   :target: https://github.com/h5py/h5py/actions/workflows/build_wheels.yml
 .. image:: https://ci.appveyor.com/api/projects/status/h3iajp4d1myotprc/branch/master?svg=true
    :target: https://ci.appveyor.com/project/h5py/h5py/branch/master
 .. image:: https://dev.azure.com/h5pyappveyor/h5py/_apis/build/status/h5py.h5py?branchName=master
@@ -7,15 +7,15 @@
 
 HDF5 for Python
 ===============
-`h5py` is a thin, pythonic wrapper around `HDF5 <https://portal.hdfgroup.org/display/HDF5/>`_,
-which runs on Python 3 (3.7+).
+`h5py` is a thin, pythonic wrapper around `HDF5 <https://www.hdfgroup.org/solutions/hdf5/>`_,
+which runs on Python 3 (3.10+).
 
 Websites
 --------
 
 * Main website: https://www.h5py.org
 * Source code: https://github.com/h5py/h5py
-* Discussion forum: https://forum.hdfgroup.org/c/hdf-tools/h5py
+* Discussion forum: https://forum.hdfgroup.org/c/hdf5/h5py
 
 Installation
 ------------
@@ -34,7 +34,7 @@ Reporting bugs
 --------------
 
 Open a bug at https://github.com/h5py/h5py/issues.  For general questions, ask
-on the HDF forum (https://forum.hdfgroup.org/c/hdf-tools/h5py).
+on the HDF forum (https://forum.hdfgroup.org/c/hdf5/h5py).
 
 .. _`Continuum Anaconda`: http://continuum.io/downloads
 .. _`Enthought Canopy`: https://www.enthought.com/products/canopy/
